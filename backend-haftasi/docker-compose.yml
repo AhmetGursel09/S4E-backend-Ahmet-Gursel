@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 293031Ab!   
+      POSTGRES_DB: jobsdb
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"   
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"     
+      - "15672:15672"   
+
+  api:
+    build: ./app
+    command: flask run --host=0.0.0.0 --port=5000
+    environment:
+      FLASK_APP: app
+      FLASK_ENV: development
+      DATABASE_URL: postgresql+psycopg2://postgres:293031Ab!@db:5432/jobsdb
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+      ALLOWED_COMMANDS: ls,pwd,whoami,echo,cat
+      WORKDIR: /app
+    volumes:
+      - ./app:/app
+    depends_on:
+      - db
+      - rabbitmq
+    ports:
+      - "5000:5000"
+
+  worker:
+    build: ./app
+    command: celery -A app.celery_app.celery worker --loglevel=info
+    environment:
+      FLASK_APP: app
+      DATABASE_URL: postgresql+psycopg2://postgres:293031Ab!rem@db:5432/jobsdb
+      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+      ALLOWED_COMMANDS: ls,pwd,whoami,echo,cat
+      WORKDIR: /app
+    volumes:
+      - ./app:/app
+    depends_on:
+      - db
+      - rabbitmq
+
+volumes:
+  db_data:
