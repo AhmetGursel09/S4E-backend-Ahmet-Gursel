@@ -1,0 +1,22 @@
+# app/app/__init__.py
+from flask import Flask
+from app.config import Config
+from .database import db, init_db
+from .celery_app import init_celery  # <<< EKLENDİ
+
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object(Config)
+
+    db.init_app(app)
+    with app.app_context():
+        init_db()
+
+    from .api import api_bp
+    app.register_blueprint(api_bp)
+
+    # Celery'e Flask app'i burada bağla (döngü kırılır)
+    init_celery(app)
+    return app
+
+app = create_app()

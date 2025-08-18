@@ -1,0 +1,120 @@
+# app/app/tasks.py
+import shlex
+import subprocess
+from celery import shared_task
+from .celery_app import celery
+from .database import db, Job, Result
+from .config import Config
+
+# ---- Job 1: SHELL -----------------------------------------------------------
+@shared_task(name="app.tasks.run_shell")
+def run_shell(job_id: int):
+    with celery.flask_app.app_context():
+        job = Job.query.get(job_id)
+        if not job:
+            return
+
+        job.status = "running"
+        db.session.commit()
+
+        cmd = (job.params or {}).get("command", "").strip()
+        base = shlex.split(cmd)[0] if cmd else ""
+        if base not in Config.ALLOWED_COMMANDS:
+            job.status = "failed"
+            db.session.add(Result(job_id=job.id, summary="Command not allowed",
+                                  details={"command": cmd, "allowed": Config.ALLOWED_COMMANDS}))
+            db.session.commit()
+            return
+
+        try:
+            proc = subprocess.run(
+                cmd, shell=True, cwd=Config.WORKDIR,
+                capture_output=True, text=True, timeout=60
+            )
+            summary = f"Shell command finished with code {proc.returncode}"
+            details = {
+                "command": cmd,
+                "stdout": proc.stdout,
+                "stderr": proc.stderr,
+                "returncode": proc.returncode
+            }
+
+            db.session.add(Result(job_id=job.id, summary=summary, details=details))
+            job.status = "finished" if proc.returncode == 0 else "failed"
+            db.session.commit()
+        except subprocess.TimeoutExpired:
+            job.status = "failed"
+            db.session.add(Result(job_id=job.id, summary="Command timed out", details={"command": cmd}))
+            db.session.commit()
+
+# ---- Job 2: CRAWL (katana) --------------------------------------------------
+@shared_task(name="app.tasks.crawl_site")
+def crawl_site(job_id: int):
+    with celery.flask_app.app_context():
+        job = Job.query.get(job_id)
+        if not job:
+            return
+
+        job.status = "running"
+        db.session.commit()
+
+        url = (job.params or {}).get("url", "").strip()
+        if not (url.startswith("http://") or url.startswith("https://")):
+            job.status = "failed"
+            db.session.add(Result(job_id=job.id, summary="Invalid URL", details={"url": url}))
+            db.session.commit()
+            return
+
+        try:
+            cmd = f"katana -u {shlex.quote(url)} -silent"
+            proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
+
+            if proc.returncode != 0:
+                job.status = "failed"
+                db.session.add(Result(job_id=job.id, summary="Katana failed",
+                                      details={"url": url, "stderr": proc.stderr}))
+                db.session.commit()
+                return
+
+            lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+            unique = sorted(set(lines))
+            count = len(unique)
+
+            db.session.add(Result(
+                job_id=job.id,
+                summary=f"Crawl complete: {count} unique URLs",
+                details={"url": url, "url_count": count, "urls": unique[:2000]}
+            ))
+            job.status = "finished"
+            db.session.commit()
+        except subprocess.TimeoutExpired:
+            job.status = "failed"
+            db.session.add(Result(job_id=job.id, summary="Katana timed out", details={"url": url}))
+            db.session.commit()
+
+# ---- Ekstra Job 3: HTTP STATUS ---------------------------------------------
+@shared_task(name="app.tasks.http_status")
+def http_status(job_id: int):
+    with celery.flask_app.app_context():
+        import requests
+        job = Job.query.get(job_id)
+        if not job:
+            return
+
+        job.status = "running"
+        db.session.commit()
+
+        url = (job.params or {}).get("url", "").strip()
+        try:
+            r = requests.get(url, timeout=20)
+            db.session.add(Result(
+                job_id=job.id,
+                summary=f"HTTP status {r.status_code}",
+                details={"url": url, "status_code": r.status_code, "content_length": len(r.content)}
+            ))
+            job.status = "finished"
+            db.session.commit()
+        except Exception as e:
+            job.status = "failed"
+            db.session.add(Result(job_id=job.id, summary="HTTP request failed", details={"url": url, "error": str(e)}))
+            db.session.commit()

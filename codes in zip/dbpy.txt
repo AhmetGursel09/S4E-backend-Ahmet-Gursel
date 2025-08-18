@@ -1,0 +1,27 @@
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.dialects.postgresql import JSONB
+from datetime import datetime
+
+db = SQLAlchemy()
+
+class Job(db.Model):
+    __tablename__ = "jobs"
+    id = db.Column(db.Integer, primary_key=True)
+    type = db.Column(db.String(50), nullable=False)          # shell | crawl | httpstatus
+    params = db.Column(JSONB, nullable=False)                 # job parametreleri
+    status = db.Column(db.String(20), nullable=False, default="queued")  # queued|running|finished|failed
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    results = db.relationship("Result", backref="job", lazy=True)
+
+class Result(db.Model):
+    __tablename__ = "results"
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey("jobs.id"), nullable=False)
+    summary = db.Column(db.String(255), nullable=False)
+    details = db.Column(JSONB)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+def init_db():
+    db.create_all()

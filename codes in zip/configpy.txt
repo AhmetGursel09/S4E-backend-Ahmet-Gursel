@@ -1,0 +1,14 @@
+import os
+
+class Config:
+    SQLALCHEMY_DATABASE_URI = os.getenv(
+        "DATABASE_URL",
+        "postgresql+psycopg2://postgres:postgres@db:5432/jobsdb"
+    )
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
+    CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "rpc://")
+
+    ALLOWED_COMMANDS = os.getenv("ALLOWED_COMMANDS", "ls,pwd,whoami,echo,cat").split(",")
+    WORKDIR = os.getenv("WORKDIR", "/app")

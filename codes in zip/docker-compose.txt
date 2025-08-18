@@ -1,0 +1,55 @@
+services:
+  api:
+    build: ./app
+    command: flask run --host=0.0.0.0 --port=5000
+    env_file:
+      - .env
+    environment:
+      - FLASK_APP=app
+    volumes:
+      - ./app:/app
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+
+  worker:
+    build: ./app
+    command: celery -A app.celery_app.celery worker --loglevel=info -Q default,celery
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 293031
+      POSTGRES_DB: jobsdb
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jobsdb"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    # İçeride 5672/15672, hostta çakışmasın diye alternatif portlara map ediyoruz
+    ports:
+      - "5673:5672"    # AMQP (Celery, istersen hosttan test edersin)
+      - "15673:15672"  # Management UI (hosttan açmak için)
+    # Celery konteynerleri yine iç adresi kullanacak: amqp://guest:guest@rabbitmq:5672//
+
+volumes:
+  db_data:

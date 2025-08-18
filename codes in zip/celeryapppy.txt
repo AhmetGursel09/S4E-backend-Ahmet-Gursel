@@ -1,0 +1,27 @@
+# app/app/celery_app.py
+from flask import Flask
+from celery import Celery
+from .config import Config
+from .database import db, init_db
+
+def make_flask_app() -> Flask:
+    """Celery için minimal Flask app (API blueprint import yok => circular yok)."""
+    app = Flask(__name__)
+    app.config.from_object(Config)
+    db.init_app(app)
+    with app.app_context():
+        init_db()
+    return app
+
+celery = Celery(
+    __name__,
+    broker=Config.CELERY_BROKER_URL,
+    backend=Config.CELERY_RESULT_BACKEND
+)
+celery.conf.task_routes = {"app.tasks.*": {"queue": "default"}}
+
+# Flask app'i Celery'e iliştir
+celery.flask_app = make_flask_app()
+
+# --- EN KRİTİK SATIR: görevleri worker'a tanıt ---
+import app.tasks

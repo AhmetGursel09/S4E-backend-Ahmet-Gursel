@@ -1,0 +1,91 @@
+from flask import Blueprint, request, jsonify
+from .database import db, Job, Result
+
+
+api_bp = Blueprint("api", __name__)
+
+@api_bp.route("/health", methods=["GET"])
+def health():
+    return {"status": "ok"}
+
+@api_bp.route("/jobs", methods=["POST"])
+def create_job():
+    data = request.get_json() or {}
+    jtype = data.get("type")
+    if jtype not in ("shell", "crawl", "httpstatus"):
+        return jsonify({"error": "type must be one of: shell, crawl, httpstatus"}), 400
+
+    params = data.get("params", {})
+    job = Job(type=jtype, params=params, status="queued")
+    db.session.add(job)
+    db.session.commit()
+
+    # Circular import'ı önlemek için import burada:
+    from .celery_app import celery
+    task_map = {
+        "shell": "app.tasks.run_shell",
+        "crawl": "app.tasks.crawl_site",
+        "httpstatus": "app.tasks.http_status",
+    }
+    celery.send_task(task_map[jtype], args=[job.id], queue="default")
+
+    return jsonify({"job_id": job.id, "status": job.status}), 202
+
+
+@api_bp.route("/jobs", methods=["GET"])
+def list_jobs():
+    jobs = Job.query.order_by(Job.created_at.desc()).all()
+    return jsonify([
+        {
+            "id": j.id,
+            "type": j.type,
+            "status": j.status,
+            "created_at": j.created_at.isoformat()
+        } for j in jobs
+    ])
+
+@api_bp.route("/jobs/<int:job_id>", methods=["GET"])
+def get_job(job_id: int):
+    j = Job.query.get_or_404(job_id)
+    return jsonify({
+        "id": j.id,
+        "type": j.type,
+        "status": j.status,
+        "params": j.params,
+        "created_at": j.created_at.isoformat(),
+        "updated_at": j.updated_at.isoformat()
+    })
+
+@api_bp.route("/results", methods=["GET"])
+def list_results():
+    res = Result.query.order_by(Result.created_at.desc()).all()
+
+    def short(details):
+        if not details:
+            return None
+        d = dict(details)
+        if "urls" in d:
+            d["urls"] = d["urls"][:50]  # liste endpointinde çok büyümesin
+        return d
+
+    return jsonify([
+        {
+            "id": r.id,
+            "job_id": r.job_id,
+            "summary": r.summary,
+            "details": short(r.details),
+            "created_at": r.created_at.isoformat()
+        } for r in res
+    ])
+    
+
+@api_bp.route("/results/<int:res_id>", methods=["GET"])
+def get_result(res_id: int):
+    r = Result.query.get_or_404(res_id)
+    return jsonify({
+        "id": r.id,
+        "job_id": r.job_id,
+        "summary": r.summary,
+        "details": r.details,
+        "created_at": r.created_at.isoformat()
+    })
