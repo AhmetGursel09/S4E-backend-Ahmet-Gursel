@@ -1,0 +1,40 @@
+(venv) PS C:\Users\gurse\backend-haftasi> # 1) Shell job oluştur
+(venv) PS C:\Users\gurse\backend-haftasi> $j1 = Invoke-RestMethod -Uri "http://127.0.0.1:5000/jobs" `
+>>   -Method Post `
+>>   -ContentType "application/json" `
+>>   -Body (@{type="shell"; params=@{command="ls"}} | ConvertTo-Json)
+(venv) PS C:\Users\gurse\backend-haftasi>
+(venv) PS C:\Users\gurse\backend-haftasi> $jid1 = $j1.job_id
+(venv) PS C:\Users\gurse\backend-haftasi> $jid1
+2
+(venv) PS C:\Users\gurse\backend-haftasi>
+(venv) PS C:\Users\gurse\backend-haftasi> # 2) Durumu bekle
+(venv) PS C:\Users\gurse\backend-haftasi> do {
+>>   Start-Sleep -Seconds 1
+>>   $st1 = Invoke-RestMethod -Uri "http://127.0.0.1:5000/jobs/$jid1"
+>>   "status = $($st1.status)"
+>> } while ($st1.status -in @("queued","running"))
+status = finished
+(venv) PS C:\Users\gurse\backend-haftasi>
+(venv) PS C:\Users\gurse\backend-haftasi> # 3) Sonucu al (stdout/stderr görmek için)
+(venv) PS C:\Users\gurse\backend-haftasi> $r1 = (Invoke-RestMethod -Uri "http://127.0.0.1:5000/results") |
+>>       Where-Object { $_.job_id -eq $jid1 } | Select-Object -First 1
+(venv) PS C:\Users\gurse\backend-haftasi>
+(venv) PS C:\Users\gurse\backend-haftasi> $r1.summary
+Shell command finished with code 0
+(venv) PS C:\Users\gurse\backend-haftasi> $r1.details.returncode
+0
+(venv) PS C:\Users\gurse\backend-haftasi> $r1.details.stdout
+app
+dockerfile
+requirements.txt
+
+(venv) PS C:\Users\gurse\backend-haftasi> $r1.details.stderr
+
+(venv) PS C:\Users\gurse\backend-haftasi> # echo örneği
+(venv) PS C:\Users\gurse\backend-haftasi> (@{type="shell"; params=@{command='echo "hello from job1"'}} | ConvertTo-Json) `
+>> | % { Invoke-RestMethod -Uri "http://127.0.0.1:5000/jobs" -Method Post -ContentType "application/json" -Body $_ }
+
+job_id status
+------ ------
+     3 queued

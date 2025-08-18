@@ -1,0 +1,29 @@
+(venv) PS C:\Users\gurse\backend-haftasi> curl.exe http://127.0.0.1:5000/health
+{"status":"ok"}
+(venv) PS C:\Users\gurse\backend-haftasi> $j = Invoke-RestMethod -Uri "http://127.0.0.1:5000/jobs" `
+>>   -Method Post `
+>>   -ContentType "application/json" `
+>>   -Body (@{type="crawl"; params=@{url="https://example.com"}} | ConvertTo-Json)
+(venv) PS C:\Users\gurse\backend-haftasi>
+(venv) PS C:\Users\gurse\backend-haftasi> $jid = $j.job_id
+(venv) PS C:\Users\gurse\backend-haftasi> $j
+
+job_id status
+------ ------
+     1 queued
+
+
+(venv) PS C:\Users\gurse\backend-haftasi> do {
+>>   Start-Sleep -Seconds 1
+>>   $st = Invoke-RestMethod -Uri "http://127.0.0.1:5000/jobs/$jid"
+>>   "status = $($st.status)"
+>> } while ($st.status -in @("queued","running"))
+status = finished
+(venv) PS C:\Users\gurse\backend-haftasi> $results = Invoke-RestMethod -Uri "http://127.0.0.1:5000/results"
+(venv) PS C:\Users\gurse\backend-haftasi> $r = $results | Where-Object { $_.job_id -eq $jid } | Select-Object -First 1
+(venv) PS C:\Users\gurse\backend-haftasi> $r.summary
+Crawl complete: 1 unique URLs
+(venv) PS C:\Users\gurse\backend-haftasi> $r.details.url_count
+1
+(venv) PS C:\Users\gurse\backend-haftasi> $r.details.urls | Select-Object -First 10
+https://example.com

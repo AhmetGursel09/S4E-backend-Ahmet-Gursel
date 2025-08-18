@@ -1,0 +1,23 @@
+(venv) PS C:\Users\gurse\backend-haftasi> $j3 = Invoke-RestMethod -Uri "http://127.0.0.1:5000/jobs" `
+>>   -Method Post `
+>>   -ContentType "application/json" `
+>>   -Body (@{type="httpstatus"; params=@{url="https://python.org"}} | ConvertTo-Json)
+(venv) PS C:\Users\gurse\backend-haftasi>
+(venv) PS C:\Users\gurse\backend-haftasi> $jid3 = $j3.job_id
+(venv) PS C:\Users\gurse\backend-haftasi> $jid3
+4
+(venv) PS C:\Users\gurse\backend-haftasi> do {
+>>   Start-Sleep -Seconds 1
+>>   $st3 = Invoke-RestMethod -Uri "http://127.0.0.1:5000/jobs/$jid3"
+>>   "status = $($st3.status)"
+>> } while ($st3.status -in @("queued","running"))
+status = finished
+(venv) PS C:\Users\gurse\backend-haftasi>
+(venv) PS C:\Users\gurse\backend-haftasi> $r3 = (Invoke-RestMethod -Uri "http://127.0.0.1:5000/results") |
+>>       Where-Object { $_.job_id -eq $jid3 } | Select-Object -First 1
+(venv) PS C:\Users\gurse\backend-haftasi>
+(venv) PS C:\Users\gurse\backend-haftasi> $r3.summary
+HTTP status 200
+(venv) PS C:\Users\gurse\backend-haftasi> $r3.details.status_code
+200
+(venv) PS C:\Users\gurse\backend-haftasi> $r3.details.final_url
