@@ -51,5 +51,18 @@ services:
       - "15673:15672"  # Management UI (hosttan açmak için)
     # Celery konteynerleri yine iç adresi kullanacak: amqp://guest:guest@rabbitmq:5672//
 
+  frontend:
+    build: ../frontend-haftasi-next
+    environment:
+      - BACKEND_URL=http://api:5000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../frontend-haftasi-next:/app
+      - /app/node_modules
+    depends_on:
+      api:
+        condition: service_started
+
 volumes:
   db_data:
