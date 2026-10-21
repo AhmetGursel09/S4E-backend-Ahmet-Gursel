@@ -33,7 +33,7 @@ services:
     image: postgres:15
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 293031
+      POSTGRES_PASSWORD: 
       POSTGRES_DB: jobsdb
     volumes:
       - db_data:/var/lib/postgresql/data
@@ -49,7 +49,7 @@ services:
     ports:
       - "5673:5672"    # AMQP (Celery, istersen hosttan test edersin)
       - "15673:15672"  # Management UI (hosttan açmak için)
-    # Celery konteynerleri yine iç adresi kullanacak: amqp://guest:guest@rabbitmq:5672//
+    # Celery konteynerleri yine iç adresi kullanacak: amqp://guest:guest@rabbitmq://
 
   frontend:
     build: ../frontend-haftasi-next
